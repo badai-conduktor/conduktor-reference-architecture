@@ -1,0 +1,28 @@
+# Azure Subscription ID
+subscription_id = "00000000-0000-0000-0000-000000000000"
+
+# Resource Group
+resource_group_name = "conduktor-aks-rg"
+
+# Azure Region
+location = "eastus"
+
+# AKS Cluster
+aks_cluster_name = "conduktor-aks"
+aks_node_count   = 3
+aks_node_vm_size = "Standard_D4s_v3"
+
+# Storage Account (must be globally unique, lowercase, no hyphens, 3-24 chars)
+storage_account_name = "conduktorstorage"
+blob_container_name  = "conduktor-monitoring"
+
+# Key Vault (must be globally unique)
+key_vault_name = "conduktor-kv"
+
+# Domain
+domain = "conduktor.test"
+
+# Network
+vnet_address_space  = "10.0.0.0/16"
+aks_subnet_prefix   = "10.0.1.0/24"
+appgw_subnet_prefix = "10.0.2.0/24"
