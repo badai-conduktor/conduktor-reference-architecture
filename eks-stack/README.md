@@ -13,89 +13,89 @@ All other components (Kafka, PostgreSQL, Keycloak, Vault, Schema Registry, Prome
 
 ## Prerequisites
 
-Install the following tools on your machine:
+- AWS CLI (`aws`) installed and configured (`aws configure`)
+- Tools installed locally: `helm`, `kubectl`, `terraform`, `yq`, `envsubst`, `keytool`, `openssl`
+- A valid Conduktor license key
 
 ```bash
-brew install awscli kubectl helm terraform yq gettext openjdk openssl eksctl
-```
-
-Configure the AWS CLI:
-
-```bash
-aws configure          # enter Access Key, Secret Key, region, output=json
-aws sts get-caller-identity   # verify your identity
+brew install awscli kubectl helm terraform yq gettext openjdk openssl
 ```
 
 ## Quick Start
 
-### 1. Deploy AWS infrastructure with Terraform
+### 1. Deploy AWS infrastructure
 
 ```bash
 cd eks-stack/infrastructure
 cp terraform.tfvars.example terraform.tfvars
 ```
 
-Edit `terraform.tfvars` — set your AWS region, cluster name, and S3 bucket name (must be globally unique). Then:
+Edit `terraform.tfvars` with your AWS-specific values (region, cluster name, S3 bucket name).
 
 ```bash
-terraform init
-terraform apply
+cd ..
+make infra
 ```
 
 This creates: VPC, EKS cluster (with managed node group), EBS CSI driver, S3 bucket, OIDC provider, IAM roles for ALB controller and Cortex, and a self-signed ACM certificate. Takes ~15-20 minutes.
 
-### 2. Configure `config.env`
+### 2. Configure
 
 ```bash
-cd ..   # back to eks-stack/
 cp config.env.example config.env
 ```
 
-Populate it with the Terraform outputs:
+Edit `config.env` with values from the Terraform outputs:
 
 ```bash
 terraform -chdir=infrastructure output -raw config_env
 ```
 
-Copy the printed block into `config.env`. Then configure kubectl:
+Configure kubectl:
 
 ```bash
 $(terraform -chdir=infrastructure output -raw kubeconfig_command)
 ```
 
-### 3. Set your Conduktor license
+Set your license:
 
 ```bash
 export LICENSE="your-conduktor-license-key"
-# or:
+```
+
+Or create a `.env` file:
+
+```bash
 echo "LICENSE=your-conduktor-license-key" > .env
 ```
 
-### 4. Deploy infrastructure
+### 3. Deploy dependencies
 
 ```bash
 make start-eks-stack
 ```
 
-Installs cert-manager, trust-manager, AWS Load Balancer Controller, PostgreSQL (x2), Kafka, Vault, Prometheus, Grafana, Schema Registry, Keycloak, and creates ALB/NLB ingress resources.
+This installs cert-manager, trust-manager, AWS Load Balancer Controller, PostgreSQL (x2), Kafka, Vault, Prometheus, Grafana, Schema Registry, and Keycloak. It also creates ALB Ingress resources for Console, Gateway admin, and Keycloak.
 
-### 5. Install Conduktor platform
+### 4. Install Conduktor platform
 
 ```bash
 make install-conduktor-platform
 ```
 
-### 6. Set up `/etc/hosts`
+Deploys Conduktor Gateway and Console via Helm.
+
+### 5. Set up `/etc/hosts`
 
 ```bash
 ./get-hosts.sh
 ```
 
-Copy and paste the output into `/etc/hosts` (requires `sudo`). This maps the `.test` domains to the ALB and NLB IP addresses so your machine can resolve them.
+Copy and paste the output into `/etc/hosts` (may need sudo access).
 
-> **Using real domains?** Create DNS records instead: point `console.yourdomain.com`, `gateway.yourdomain.com`, `oidc.yourdomain.com` to the ALB, and `*.gateway.yourdomain.com` to the NLB.
+> **Using real domains?** If you own a domain, create DNS records instead: point `console.yourdomain.com`, `gateway.yourdomain.com`, `oidc.yourdomain.com` to the ALB address, and `*.gateway.yourdomain.com` to the NLB address.
 
-### 7. Provision platform resources
+### 6. Provision platform resources
 
 ```bash
 make init-conduktor-platform
@@ -103,46 +103,76 @@ make init-conduktor-platform
 
 Runs Terraform to create users, groups, clusters, interceptors, and self-service configurations.
 
-### 8. Verify
+### Conduktor Console
 
-- Console: `https://console.conduktor.test` — accept the self-signed cert warning
-- Gateway admin API: `https://gateway.conduktor.test:8888`
-- Kafka proxy: `gateway.conduktor.test:9092`
-- Keycloak admin: `https://oidc.conduktor.test/admin`
+You can then access Conduktor Console at [https://console.conduktor.test](https://console.conduktor.test)
 
-#### Credentials
+You can then login using the following credentials :
 
-| Account | Username | Password | Groups |
-|---|---|---|---|
-| local | admin@demo.dev | adminP4ss! | admin |
-| sso (keycloak) | conduktor-admin | conduktor | admin |
-| sso (keycloak) | alice | alice | project-a |
-| sso (keycloak) | bob | bob | project-b |
+| Account Type   | Username                                     | Password   | Groups    |
+|----------------|----------------------------------------------|------------|-----------|
+| local          | admin@demo.dev                               | adminP4ss! | admin     |
+| sso (keycloak) | conduktor-admin / conduktor-admin@company.io | conduktor  | admin     |
+| sso (keycloak) | alice / alice@company.io                     | alice      | project-a |
+| sso (keycloak) | bob / alice@company.io                       | bob        | project-b |
 
-#### Gateway
+You will be able to create topics and otherwise interact with both Kafka Cluster and Conduktor Gateway.
+
+The connection to Conduktor Gateway uses SASL PLAIN with a credential generated earlier in the previous step.
+
+### Conduktor Gateway
+
+You can reach the Conduktor Gateway Admin API at [https://gateway.conduktor.test:8888](https://gateway.conduktor.test:8888).
 
 ```bash
-curl -k -u admin:adminP4ss! 'https://gateway.conduktor.test:8888/gateway/v2/interceptor'
+curl -k -u admin:adminP4ss! \
+    'https://gateway.conduktor.test:8888/gateway/v2/interceptor'
 ```
 
+You can reach Kafka through Gateway using SASL OAuthbearer (see client.properties file). Here we assume `kafka-topics` is installed locally and is running Apache Kafka version 4 or greater.
+
 ```bash
+# Need to set truststore at the JVM level to authenticate with OIDC
 export KAFKA_OPTS="-Djava.security.manager=allow \
-  -Djavax.net.ssl.trustStore=./truststore.jks \
-  -Djavax.net.ssl.trustStorePassword=conduktor \
-  -Dorg.apache.kafka.sasl.oauthbearer.allowed.urls=https://oidc.conduktor.test/realms/conduktor-realm/protocol/openid-connect/token"
-
-kafka-topics --list \
-  --bootstrap-server gateway.conduktor.test:9092 \
-  --command-config client.properties
+-Djavax.net.ssl.trustStore=./truststore.jks \
+-Djavax.net.ssl.trustStorePassword=conduktor \
+-Dorg.apache.kafka.sasl.oauthbearer.allowed.urls=https://oidc.conduktor.test/realms/conduktor-realm/protocol/openid-connect/token"
 ```
 
-#### Grafana
+```bash
+kafka-topics --list \
+    --bootstrap-server gateway.conduktor.test:9092 \
+    --command-config client.properties
+```
+
+Alternatively, to run a Kafka client on an older version, you can use this docker command:
+
+```bash
+docker run --rm --network host \
+  -e KAFKA_OPTS="-Djavax.net.ssl.trustStore=/tmp/truststore.jks -Djavax.net.ssl.trustStorePassword=conduktor" \
+  -v $PWD/truststore.jks:/tmp/truststore.jks \
+  -v $PWD/client_pre_ak4.properties:/tmp/client.properties \
+  apache/kafka:3.8.0 /opt/kafka/bin/kafka-topics.sh \
+    --bootstrap-server gateway.conduktor.test:9092 \
+    --command-config /tmp/client.properties \
+    --list
+```
+
+### Identity Provider
+
+You can also manage OIDC keycloak server at [https://oidc.conduktor.test](https://oidc.conduktor.test) with the following credentials `admin` / `conduktor`.
+
+### Grafana Dashboards
+
+Port forward grafana to take a look at the dashboards.
 
 ```bash
 kubectl port-forward svc/grafana-service -n monitoring 3000:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) — login with `admin` / `admin`.
+Go to [http://localhost:3000](http://localhost:3000) and log in with `admin` and `admin` for username, password to explore the dashboards that ship with the Conduktor helm charts.
+
+Press `Ctrl+C` to kill the port forward.
 
 ## Teardown
 
@@ -150,67 +180,13 @@ Open [http://localhost:3000](http://localhost:3000) — login with `admin` / `ad
 make stop-eks-stack
 ```
 
-Uninstalls all Helm releases, removes Kubernetes manifests, ALB/NLB resources, and cleans Terraform state. The EKS cluster itself is not deleted — destroy it with:
+This uninstalls all Helm releases, removes Kubernetes manifests, ALB/NLB resources, and cleans Terraform state. The EKS cluster itself is not deleted.
+
+To also destroy the AWS infrastructure:
 
 ```bash
-terraform -chdir=infrastructure destroy
+make destroy-infra
 ```
-
-## Tuning
-
-### Resource Requests and Limits
-
-Default values are set low for demo purposes. For production:
-
-**Console** (`console-values.yaml`):
-```yaml
-platform:
-  resources:
-    requests:
-      cpu: 2000m
-      memory: 4Gi
-platformCortex:
-  resources:
-    requests:
-      cpu: 1000m
-      memory: 2Gi
-```
-
-**Gateway** (`gateway-values.yaml`):
-```yaml
-gateway:
-  replicas: 3
-  resources:
-    requests:
-      cpu: 2000m
-      memory: 4Gi
-```
-
-**Kafka** (`helm-values/kafka.yaml`):
-```yaml
-controller:
-  persistence:
-    size: 100Gi
-  resources:
-    requests:
-      cpu: 1000m
-      memory: 4Gi
-```
-
-**PostgreSQL** (`helm-values/postgresql-main.yaml`, `helm-values/postgresql-sql.yaml`):
-```yaml
-primary:
-  persistence:
-    size: 50Gi
-```
-
-### Node Sizing
-
-The default `m5.xlarge` (4 vCPU / 16 GB) works for demos. For production consider `m5.2xlarge` or larger. Change `node_instance_type` in `infrastructure/terraform.tfvars` before applying.
-
-### Load Balancer Tuning
-
-ALB settings are configured inline in `01-start.sh`. NLB settings for the Kafka proxy are in `gateway-values.yaml` under `service.external.annotations`.
 
 ## Architecture
 
@@ -223,8 +199,8 @@ ALB settings are configured inline in `01-start.sh`. NLB settings for the Kafka 
          │ ALB │    │ ALB │    │ NLB │
          │:443 │    │:443 │    │:9092│
          └──┬──┘    └──┬──┘    └──┬──┘
-            │          │          │
-    Console │  Keycloak│  Gateway │ (Kafka proxy)
+            │          │     :8888│
+    Console │  Keycloak│  Gateway │
             │          │          │
       ┌─────▼──┐  ┌───▼────┐ ┌──▼─────┐
       │Console │  │Keycloak│ │Gateway │
@@ -248,12 +224,14 @@ ALB settings are configured inline in `01-start.sh`. NLB settings for the Kafka 
 | `infrastructure/` | Terraform for AWS infrastructure (VPC, EKS, IAM, S3, ACM) |
 | `config.env.example` | Configuration template — copy to `config.env` |
 | `kubernetes_utils.sh` | Shared shell functions (config loading, waits, truststore generation) |
-| `01-start.sh` | Deploy all infrastructure and dependencies |
+| `01-start.sh` | Deploy all K8s dependencies |
 | `02-install-conduktor-platform.sh` | Install Conduktor Console and Gateway |
 | `03-init-conduktor-platform.sh` | Terraform provisioning (users, groups, clusters) |
-| `04-stop.sh` | Complete teardown |
+| `04-stop.sh` | Teardown K8s resources |
 | `console-values.yaml` | Console Helm values (S3, IRSA, OIDC) |
+| `console-secrets.yaml` | Console secrets (empty S3 creds for IRSA) |
 | `gateway-values.yaml` | Gateway Helm values (NLB, SNI routing) |
+| `gateway-secrets.yaml` | Gateway secrets |
 | `helm-values/` | Helm values for all dependencies |
 | `manifests/` | Kubernetes manifests (parameterized with envsubst) |
 | `provisioning/` | Terraform config for Conduktor resources (users, groups, clusters) |
