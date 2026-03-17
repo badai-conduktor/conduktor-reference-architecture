@@ -156,6 +156,7 @@ metadata:
     kubernetes.io/ingress.class: azure/application-gateway
     appgw.ingress.kubernetes.io/ssl-redirect: "true"
     appgw.ingress.kubernetes.io/appgw-ssl-certificate: "conduktor-wildcard-cert"
+    appgw.ingress.kubernetes.io/appgw-trusted-root-certificate: "local-selfsigned-ca"
     appgw.ingress.kubernetes.io/backend-protocol: "https"
     appgw.ingress.kubernetes.io/backend-hostname: "${CONSOLE_DOMAIN}"
     appgw.ingress.kubernetes.io/health-probe-path: "/"
@@ -184,6 +185,7 @@ metadata:
     kubernetes.io/ingress.class: azure/application-gateway
     appgw.ingress.kubernetes.io/ssl-redirect: "true"
     appgw.ingress.kubernetes.io/appgw-ssl-certificate: "conduktor-wildcard-cert"
+    appgw.ingress.kubernetes.io/appgw-trusted-root-certificate: "local-selfsigned-ca"
     appgw.ingress.kubernetes.io/backend-protocol: "https"
     appgw.ingress.kubernetes.io/backend-hostname: "${GATEWAY_DOMAIN}"
     appgw.ingress.kubernetes.io/health-probe-path: "/"
@@ -212,6 +214,7 @@ metadata:
     kubernetes.io/ingress.class: azure/application-gateway
     appgw.ingress.kubernetes.io/ssl-redirect: "true"
     appgw.ingress.kubernetes.io/appgw-ssl-certificate: "conduktor-wildcard-cert"
+    appgw.ingress.kubernetes.io/appgw-trusted-root-certificate: "local-selfsigned-ca"
     appgw.ingress.kubernetes.io/backend-protocol: "https"
     appgw.ingress.kubernetes.io/backend-hostname: "${OIDC_DOMAIN}"
     appgw.ingress.kubernetes.io/health-probe-path: "/"

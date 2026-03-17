@@ -7,7 +7,11 @@ SCRIPT_DIR=$(cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
 loadConfig
 
 # Application Gateway public IP (for Console, Gateway admin, Keycloak)
+# Try ingress status first, fall back to Azure CLI
 APPGW_IP=$(kubectl get ingress console-appgw-ingress -n conduktor -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null)
+if [ -z "$APPGW_IP" ]; then
+  APPGW_IP=$(az network public-ip show --resource-group "${AZURE_RESOURCE_GROUP}" --name "${AKS_CLUSTER_NAME}-appgw-pip" --query ipAddress -o tsv 2>/dev/null)
+fi
 # Azure Load Balancer IP (for Gateway Kafka proxy)
 LB_IP=$(kubectl get svc conduktor-gateway-external -n conduktor -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null)
 
@@ -19,8 +23,8 @@ if [ -z "$APPGW_IP" ] || [ -z "$LB_IP" ]; then
 fi
 
 # Import App Gateway certificate into local truststore
-openssl s_client -connect "${APPGW_IP}:443" -servername "${CONSOLE_DOMAIN}" </dev/null 2>/dev/null | \
-  openssl x509 -outform PEM > "$SCRIPT_DIR/appgw-cert.crt"
+echo "Q" | openssl s_client -connect "${APPGW_IP}:443" -servername "${CONSOLE_DOMAIN}" 2>/dev/null | \
+  sed -n '/BEGIN CERTIFICATE/,/END CERTIFICATE/p' > "$SCRIPT_DIR/appgw-cert.crt"
 keytool -importcert -noprompt \
   -alias appgw-self-signed \
   -file "$SCRIPT_DIR/appgw-cert.crt" \

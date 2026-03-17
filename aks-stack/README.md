@@ -128,11 +128,11 @@ The connection to Conduktor Gateway uses SASL PLAIN with a credential generated 
 
 ### Conduktor Gateway
 
-You can reach the Conduktor Gateway Admin API at [https://gateway.conduktor.test](https://gateway.conduktor.test).
+You can reach the Conduktor Gateway Admin API at [https://gateway.conduktor.test:8888](https://gateway.conduktor.test:8888).
 
 ```bash
 curl -k -u admin:adminP4ss! \
-    'https://gateway.conduktor.test/gateway/v2/interceptor'
+    'https://gateway.conduktor.test:8888/gateway/v2/interceptor'
 ```
 
 You can reach Kafka through Gateway using SASL OAuthbearer (see client.properties file). Here we assume `kafka-topics` is installed locally and is running Apache Kafka version 4 or greater.
@@ -202,17 +202,17 @@ make destroy-infra
                         │
             ┌───────────┼───────────┐
             │           │           │
-      ┌─────▼─────┐ ┌──▼──┐   ┌───▼───┐
-      │ App       │ │ App │   │ Azure │
-      │ Gateway   │ │ GW  │   │  LB   │
-      │ :443      │ │:443 │   │ :9092 │
-      └─────┬─────┘ └──┬──┘   └───┬───┘
+      ┌─────▼─────┐ ┌──▼──┐   ┌───▼────────┐
+      │ App       │ │ App │   │ Azure LB   │
+      │ Gateway   │ │ GW  │   │ :9092 Kafka│
+      │ :443      │ │:443 │   │ :8888 Admin│
+      └─────┬─────┘ └──┬──┘   └───┬────────┘
             │          │          │
-    Console │  Keycloak│  Gateway │ (Kafka proxy)
+    Console │  Keycloak│  Gateway │
             │          │          │
       ┌─────▼──┐  ┌───▼────┐ ┌──▼─────┐
       │Console │  │Keycloak│ │Gateway │
-      │  +     │  │        │ │(x2)    │
+      │  +     │  │        │ │        │
       │Cortex  │  └───┬────┘ └──┬─────┘
       └──┬──┬──┘      │         │
          │  │    ┌─────▼─────────▼────┐

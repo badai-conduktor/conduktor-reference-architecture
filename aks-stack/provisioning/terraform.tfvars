@@ -6,7 +6,7 @@ console_admin_user     = "admin@demo.dev"
 console_admin_password = "adminP4ss!"
 
 # External URL — used by Terraform provider running on your local machine
-gateway_base_url       = "https://gateway.conduktor.test"
+gateway_base_url       = "https://gateway.conduktor.test:8888"
 # Internal URL — used by Console for cluster-to-cluster communication inside the cluster
 gateway_internal_url   = "https://conduktor-gateway-internal.conduktor.svc.cluster.local"
 gateway_admin_user     = "admin"

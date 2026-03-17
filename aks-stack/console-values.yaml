@@ -115,8 +115,8 @@ monitoringConfig:
     skipSSLCheck: false # Console CA automatically mounted from config.platform.https.existingSecret
   storage:
     azure:
-      containerName: "${BLOB_CONTAINER_NAME}"
-      storageAccountName: "${STORAGE_ACCOUNT_NAME}"
+      container_name: "${BLOB_CONTAINER_NAME}"
+      storage_account_name: "${STORAGE_ACCOUNT_NAME}"
 
 platformCortex:
   enabled: true

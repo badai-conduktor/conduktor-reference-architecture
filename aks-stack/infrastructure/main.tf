@@ -46,10 +46,21 @@ resource "azurerm_public_ip" "appgw" {
 ###
 # Application Gateway
 ###
+resource "azurerm_user_assigned_identity" "appgw" {
+  name                = "${var.aks_cluster_name}-appgw-identity"
+  location            = azurerm_resource_group.main.location
+  resource_group_name = azurerm_resource_group.main.name
+}
+
 resource "azurerm_application_gateway" "main" {
   name                = "${var.aks_cluster_name}-appgw"
   location            = azurerm_resource_group.main.location
   resource_group_name = azurerm_resource_group.main.name
+
+  identity {
+    type         = "UserAssigned"
+    identity_ids = [azurerm_user_assigned_identity.appgw.id]
+  }
 
   sku {
     name     = "Standard_v2"
@@ -75,6 +86,12 @@ resource "azurerm_application_gateway" "main" {
   frontend_port {
     name = "http-port"
     port = 80
+  }
+
+  # Pre-load the Key Vault certificate so AGIC can reference it by name
+  ssl_certificate {
+    name                = "conduktor-wildcard-cert"
+    key_vault_secret_id = azurerm_key_vault_certificate.wildcard.versionless_secret_id
   }
 
   # Placeholder backend, listener, and rule — AGIC will manage the real ones
@@ -202,10 +219,10 @@ resource "azurerm_key_vault" "main" {
     ]
   }
 
-  # Allow App Gateway managed identity to access certificates
+  # Allow App Gateway user-assigned identity to access certificates
   access_policy {
     tenant_id = data.azurerm_client_config.current.tenant_id
-    object_id = azurerm_kubernetes_cluster.main.ingress_application_gateway[0].ingress_application_gateway_identity[0].object_id
+    object_id = azurerm_user_assigned_identity.appgw.principal_id
 
     secret_permissions = [
       "Get", "List",
@@ -214,6 +231,20 @@ resource "azurerm_key_vault" "main" {
       "Get", "List",
     ]
   }
+}
+
+# Separate resource to avoid cycle: key_vault -> cert -> app_gateway -> aks -> key_vault
+resource "azurerm_key_vault_access_policy" "agic" {
+  key_vault_id = azurerm_key_vault.main.id
+  tenant_id    = data.azurerm_client_config.current.tenant_id
+  object_id    = azurerm_kubernetes_cluster.main.ingress_application_gateway[0].ingress_application_gateway_identity[0].object_id
+
+  secret_permissions = [
+    "Get", "List",
+  ]
+  certificate_permissions = [
+    "Get", "List",
+  ]
 }
 
 resource "azurerm_key_vault_certificate" "wildcard" {
@@ -261,6 +292,35 @@ resource "azurerm_key_vault_certificate" "wildcard" {
       }
     }
   }
+}
+
+###
+# AGIC Role Assignments
+# AGIC needs Contributor on App Gateway, Reader on the Resource Group,
+# and Network Contributor on the App Gateway subnet for subnet join action.
+###
+resource "azurerm_role_assignment" "agic_appgw_contributor" {
+  scope                = azurerm_application_gateway.main.id
+  role_definition_name = "Contributor"
+  principal_id         = azurerm_kubernetes_cluster.main.ingress_application_gateway[0].ingress_application_gateway_identity[0].object_id
+}
+
+resource "azurerm_role_assignment" "agic_rg_reader" {
+  scope                = azurerm_resource_group.main.id
+  role_definition_name = "Reader"
+  principal_id         = azurerm_kubernetes_cluster.main.ingress_application_gateway[0].ingress_application_gateway_identity[0].object_id
+}
+
+resource "azurerm_role_assignment" "agic_subnet_network_contributor" {
+  scope                = azurerm_subnet.appgw.id
+  role_definition_name = "Network Contributor"
+  principal_id         = azurerm_kubernetes_cluster.main.ingress_application_gateway[0].ingress_application_gateway_identity[0].object_id
+}
+
+resource "azurerm_role_assignment" "agic_managed_identity_operator" {
+  scope                = azurerm_user_assigned_identity.appgw.id
+  role_definition_name = "Managed Identity Operator"
+  principal_id         = azurerm_kubernetes_cluster.main.ingress_application_gateway[0].ingress_application_gateway_identity[0].object_id
 }
 
 ###
