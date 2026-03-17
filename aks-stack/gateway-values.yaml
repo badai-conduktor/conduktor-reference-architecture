@@ -84,6 +84,8 @@ service:
     admin: true
     annotations:
       service.beta.kubernetes.io/azure-load-balancer-health-probe-request-path: "/"
+    extraSpecs:
+      externalTrafficPolicy: Local
 
 # Mount keystore for TLS
 tls:
