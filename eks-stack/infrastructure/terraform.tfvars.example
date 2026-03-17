@@ -1,0 +1,19 @@
+# AWS Region
+aws_region = "us-east-1"
+
+# EKS Cluster
+cluster_name       = "conduktor-eks"
+node_instance_type = "m5.xlarge"
+node_desired_count = 3
+node_min_count     = 2
+node_max_count     = 5
+
+# S3 bucket for Cortex monitoring (must be globally unique)
+s3_bucket_name = "conduktor-monitoring"
+
+# Base domain — use conduktor.test with /etc/hosts for local testing,
+# or a real domain you own for production
+domain = "conduktor.test"
+
+# VPC CIDR
+vpc_cidr = "10.0.0.0/16"
