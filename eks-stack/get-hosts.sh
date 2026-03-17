@@ -19,9 +19,17 @@ fi
 ALB_IP=$(dig +short "$ALB_HOST" | head -1)
 NLB_IP=$(dig +short "$NLB_HOST" | head -1)
 
+if [ -z "$ALB_IP" ] || [ -z "$NLB_IP" ]; then
+  echo "DNS not yet propagated for load balancers. Re-run this script in a few minutes."
+  [ -z "$ALB_IP" ] && echo "  - ALB IP not resolved ($ALB_HOST)"
+  [ -z "$NLB_IP" ] && echo "  - NLB IP not resolved ($NLB_HOST)"
+  exit 1
+fi
+
 # Import ALB certificate into local truststore
 openssl s_client -connect "${ALB_HOST}:443" -servername "${CONSOLE_DOMAIN}" </dev/null 2>/dev/null | \
   openssl x509 -outform PEM > "$SCRIPT_DIR/alb-cert.crt"
+keytool -delete -noprompt -alias alb-self-signed -keystore "$SCRIPT_DIR/truststore.jks" -storepass conduktor 2>/dev/null || true
 keytool -importcert -noprompt \
   -alias alb-self-signed \
   -file "$SCRIPT_DIR/alb-cert.crt" \

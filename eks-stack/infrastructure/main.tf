@@ -215,7 +215,8 @@ resource "aws_eks_addon" "ebs_csi" {
 # S3 Bucket (for Cortex monitoring storage)
 ###
 resource "aws_s3_bucket" "monitoring" {
-  bucket = var.s3_bucket_name
+  bucket        = var.s3_bucket_name
+  force_destroy = true
 }
 
 ###
