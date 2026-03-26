@@ -73,6 +73,10 @@ echo "Removing namespaces..."
 kubectl delete -f ${SCRIPT_DIR}/manifests/00-namespaces.yaml 2>/dev/null || true
 
 echo
+echo "Cleaning local certificates and truststore..."
+rm -f ${SCRIPT_DIR}/truststore.jks ${SCRIPT_DIR}/ca.crt
+
+echo
 echo "Cleaning Terraform state..."
 rm -rf ${TERRAFORM_DIR}/.terraform ${TERRAFORM_DIR}/.terraform.lock.hcl ${TERRAFORM_DIR}/terraform.tfstate*
 
