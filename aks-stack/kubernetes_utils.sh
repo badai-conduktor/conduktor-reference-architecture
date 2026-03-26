@@ -89,39 +89,31 @@ waitRollout() {
 generate_schema_registry_jks_truststore() {
   local jks_password="conduktor"
 
-  # Temporary directory to store the certificates and JKS file
   temp_dir=$(mktemp -d)
   echo "Temporary directory created at $temp_dir"
 
-  echo "Retrieving certificates..."
-  # Retrieve the CA
+  echo "Retrieving CA certificate and Kafka TLS secret..."
   waitSecretCreated cert-manager root-ca-secret
-  kubectl get secret root-ca-secret -n cert-manager -o jsonpath="{.data['ca\.crt']}" | base64 --decode > "$temp_dir/root.ca.crt"
+  kubectl get secret root-ca-secret -n cert-manager -o jsonpath="{.data['ca\.crt']}" | base64 --decode > "$temp_dir/ca.crt"
 
-  # Retrieve the Kafka TLS secret
   waitSecretCreated cdk-deps kafka-tls
   kubectl get secret kafka-tls -n cdk-deps -o jsonpath="{.data['tls\.crt']}" | base64 --decode > "$temp_dir/kafka.tls.crt"
   kubectl get secret kafka-tls -n cdk-deps -o jsonpath="{.data['tls\.key']}" | base64 --decode > "$temp_dir/kafka.tls.key"
 
-  echo "Certificates retrieved successfully."
-  ls -al "$temp_dir"
-  echo "Creating JKS truststore..."
-  # Generate the JKS truststore
-  for cert in "$temp_dir"/*.crt; do
-    keytool -importcert -noprompt \
-      -alias "$(basename "$cert" .crt)" \
-      -file "$cert" \
-      -keystore "$temp_dir/truststore.jks" \
-      -storepass "$jks_password" -noprompt
-  done
+  echo "Creating JKS truststore with CA certificate..."
+  keytool -importcert -noprompt \
+    -alias "root-ca" \
+    -file "$temp_dir/ca.crt" \
+    -keystore "$temp_dir/truststore.jks" \
+    -storepass "$jks_password"
 
-  # Generate kafka Keystore
+  # Generate Kafka keystore for Schema Registry client identity
   openssl pkcs12 -export \
     -inkey "$temp_dir/kafka.tls.key" \
     -in "$temp_dir/kafka.tls.crt" \
     -out "$temp_dir/kafka.tls.p12" \
     -name kafka \
-    -CAfile "$temp_dir/root.ca.crt" \
+    -CAfile "$temp_dir/ca.crt" \
     -caname local-selfsigned-ca \
     -passout pass:conduktor \
     -passin pass:conduktor
@@ -136,7 +128,6 @@ generate_schema_registry_jks_truststore() {
     -srcalias kafka \
     -destalias kafka
 
-  # Create a new secret with the JKS truststore
   kubectl delete secret sr-bundle-truststore -n cdk-deps --ignore-not-found
   kubectl create secret generic sr-bundle-truststore \
     --from-file=ssl.truststore.jks="$temp_dir/truststore.jks" -n cdk-deps
@@ -153,43 +144,19 @@ generate_schema_registry_jks_truststore() {
 generate_jks_truststore() {
   local jks_password="conduktor"
 
-  # Temporary directory to store the certificates and JKS file
   temp_dir=$(mktemp -d)
   echo "Temporary directory created at $temp_dir"
 
-  echo "Retrieving certificates..."
-  # Retrieve the CA
+  echo "Retrieving CA certificate..."
   waitSecretCreated cert-manager root-ca-secret
-  kubectl get secret root-ca-secret -n cert-manager -o jsonpath="{.data['ca\.crt']}" | base64 --decode > "$temp_dir/root.ca.crt"
+  kubectl get secret root-ca-secret -n cert-manager -o jsonpath="{.data['ca\.crt']}" | base64 --decode > "$temp_dir/ca.crt"
 
-  # Retrieve Postgresql TLS secret
-  waitSecretCreated cdk-deps pg-main-crt-secret
-  waitSecretCreated cdk-deps pg-sql-crt-secret
-  kubectl get secret pg-main-crt-secret -n cdk-deps -o jsonpath="{.data['tls\.crt']}" | base64 --decode > "$temp_dir/main-postgresql.tls.crt"
-  kubectl get secret pg-sql-crt-secret  -n cdk-deps -o jsonpath="{.data['tls\.crt']}" | base64 --decode > "$temp_dir/sql-postgresql.tls.crt"
-
-  # Retrieve the Kafka TLS secret
-  waitSecretCreated cdk-deps kafka-tls
-  kubectl get secret kafka-tls -n cdk-deps -o jsonpath="{.data['tls\.crt']}" | base64 --decode > "$temp_dir/kafka.tls.crt"
-
-  # Retrieve the Schema Registry TLS secret
-  waitSecretCreated cdk-deps sr-crt-secret
-  kubectl get secret sr-crt-secret -n cdk-deps -o jsonpath="{.data['tls\.crt']}" | base64 --decode > "$temp_dir/sr.tls.crt"
-
-  # Retrieve the OIDC TLS secret
-  kubectl get secret keycloak-crt-secret -n cdk-deps -o jsonpath="{.data['tls\.crt']}" | base64 --decode > "$temp_dir/oidc.tls.crt"
-
-  echo "Certificates retrieved successfully."
-  ls -al "$temp_dir"
-  echo "Creating JKS truststore..."
-  # Generate the JKS truststore
-  for cert in "$temp_dir"/*.crt; do
-    keytool -importcert -noprompt \
-      -alias "$(basename "$cert" .crt)" \
-      -file "$cert" \
-      -keystore "$temp_dir/truststore.jks" \
-      -storepass "$jks_password" -noprompt
-  done
+  echo "Creating JKS truststore with CA certificate..."
+  keytool -importcert -noprompt \
+    -alias "root-ca" \
+    -file "$temp_dir/ca.crt" \
+    -keystore "$temp_dir/truststore.jks" \
+    -storepass "$jks_password"
 
   kubectl delete secret bundle-truststore -n conduktor --ignore-not-found
   kubectl create secret generic bundle-truststore \

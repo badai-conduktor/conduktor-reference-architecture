@@ -45,7 +45,7 @@ helm upgrade --install -n conduktor \
 
 echo
 echo "Install Conduktor Console"
-yq eval -M '.stringData.CDK_LICENSE = strenv(LICENSE)' ${SCRIPT_DIR}/console-secrets.yaml > "$tmp_console_secrets"
+envsubst '$STORAGE_ACCOUNT_NAME $BLOB_CONTAINER_NAME' < ${SCRIPT_DIR}/console-secrets.yaml | yq eval -M '.stringData.CDK_LICENSE = strenv(LICENSE)' - > "$tmp_console_secrets"
 console_secrets_sha256sum=$(sha256sum "$tmp_console_secrets" | awk '{print $1}')
 kubectl apply -f "$tmp_console_secrets"
 helm upgrade --install -n conduktor \

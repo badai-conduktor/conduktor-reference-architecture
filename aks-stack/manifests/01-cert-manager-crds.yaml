@@ -33,6 +33,33 @@ spec:
   ca:
     secretName: root-ca-secret
 ---
+#### Wildcard certificate for Application Gateway frontend TLS
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: wildcard-crt
+  namespace: conduktor
+spec:
+  isCA: false
+  secretName: wildcard-crt-secret
+  subject:
+    organizations:
+      - conduktor
+  commonName: "*.conduktor.test"
+  dnsNames:
+    - "*.conduktor.test"
+    - ${CONSOLE_DOMAIN}
+    - ${GATEWAY_DOMAIN}
+    - ${OIDC_DOMAIN}
+  issuerRef:
+    name: local-ca-issuer
+    kind: ClusterIssuer
+    group: cert-manager.io
+  privateKey:
+    algorithm: RSA
+    encoding: PKCS1
+    size: 2048
+---
 #### Components certificates
 apiVersion: cert-manager.io/v1
 kind: Certificate

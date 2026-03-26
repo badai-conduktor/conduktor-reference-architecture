@@ -143,7 +143,36 @@ kubectl get secret bundle-truststore -n conduktor -o jsonpath='{.data.truststore
 kubectl get secret root-ca-secret -n cert-manager -o jsonpath='{.data.ca\.crt}' | base64 --decode > $SCRIPT_DIR/ca.crt
 
 echo
-echo "11 - Creating AGIC Ingress resources"
+echo "11 - Uploading wildcard certificate to Azure Key Vault"
+# Export the cert-manager wildcard cert and key, convert to PFX, and import to Key Vault
+# This replaces the Terraform-generated self-signed placeholder with a CA-signed cert
+wildcard_temp=$(mktemp -d)
+waitSecretCreated conduktor wildcard-crt-secret
+kubectl get secret wildcard-crt-secret -n conduktor -o jsonpath="{.data['tls\.crt']}" | base64 --decode > "$wildcard_temp/tls.crt"
+kubectl get secret wildcard-crt-secret -n conduktor -o jsonpath="{.data['tls\.key']}" | base64 --decode > "$wildcard_temp/tls.key"
+kubectl get secret root-ca-secret -n cert-manager -o jsonpath="{.data['ca\.crt']}" | base64 --decode > "$wildcard_temp/ca.crt"
+cat "$wildcard_temp/tls.crt" "$wildcard_temp/ca.crt" > "$wildcard_temp/fullchain.crt"
+openssl pkcs12 -export \
+  -inkey "$wildcard_temp/tls.key" \
+  -in "$wildcard_temp/fullchain.crt" \
+  -out "$wildcard_temp/wildcard.pfx" \
+  -passout pass:
+az keyvault certificate import \
+  --vault-name "${KEY_VAULT_NAME}" \
+  --name "conduktor-wildcard-cert" \
+  --file "$wildcard_temp/wildcard.pfx"
+rm -rf "${wildcard_temp:?Missing temp dir}"
+
+echo
+echo "12 - Uploading trusted root CA certificate to Application Gateway"
+az network application-gateway root-cert create \
+  --gateway-name "${AKS_CLUSTER_NAME}-appgw" \
+  --resource-group "${AZURE_RESOURCE_GROUP}" \
+  --name local-selfsigned-ca \
+  --cert-file "$SCRIPT_DIR/ca.crt"
+
+echo
+echo "13 - Creating AGIC Ingress resources"
 
 # AGIC Ingress for Console
 envsubst '$CONSOLE_DOMAIN $KEY_VAULT_CERT_SECRET_ID' <<'INGRESS_EOF' | kubectl apply -f -

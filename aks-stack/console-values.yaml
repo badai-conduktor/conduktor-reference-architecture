@@ -115,11 +115,13 @@ monitoringConfig:
     skipSSLCheck: false # Console CA automatically mounted from config.platform.https.existingSecret
   storage:
     azure:
-      container_name: "${BLOB_CONTAINER_NAME}"
-      storage_account_name: "${STORAGE_ACCOUNT_NAME}"
+      containerName: "${BLOB_CONTAINER_NAME}"
+      accountName: "${STORAGE_ACCOUNT_NAME}"
 
 platformCortex:
   enabled: true
+  podLabels:
+    azure.workload.identity/use: "true"
   resources:
     # reduce resource requests for example purpose.
     requests:
